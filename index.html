@@ -3,167 +3,251 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocusForge | Level Up Your Study</title>
+    <title>LedgerLite | Personal Expenses</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- VanillaTilt.js for the 3D hover mechanism -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        brandBg: '#0f172a',    // Deep slate dark
-                        panelBg: '#1e293b',    // Slightly lighter slate
-                        primary: '#6366f1',    // Indigo accent
-                        success: '#22c55e',    // Green for XP/Level ups
+                        darkBg: '#121212',
+                        cardBg: '#1E1E24',
+                        accent: '#10b981', 
+                        accentHover: '#059669'
                     }
                 }
             }
         }
     </script>
     <style>
-        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .timer-glow { text-shadow: 0 0 20px rgba(99, 102, 241, 0.5); }
+        body { background-color: #121212; color: #E0E0E0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+        /* Smooth transition for the tilt elements */
+        .tilt-card { transform-style: preserve-3d; }
+        .tilt-card-inner { transform: translateZ(20px); }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4">
+<body class="p-4 md:p-8 max-w-3xl mx-auto min-h-screen flex flex-col" onclick="initAudio()">
 
-    <!-- App Container -->
-    <div class="bg-panelBg w-full max-w-md p-8 rounded-2xl shadow-2xl border border-gray-700">
-        
-        <!-- Header & Player Stats -->
-        <div class="flex justify-between items-center mb-8 border-b border-gray-600 pb-4">
-            <div>
-                <h1 class="text-2xl font-bold tracking-wide">FocusForge</h1>
-                <p class="text-sm text-gray-400">Gamified Productivity</p>
-            </div>
-            <div class="text-right">
-                <div class="text-xs text-gray-400 uppercase tracking-wider">Current Level</div>
-                <div class="text-3xl font-black text-primary" id="levelDisplay">1</div>
-            </div>
+    <!-- Header -->
+    <header class="mb-8 border-b border-gray-700 pb-4 flex justify-between items-end">
+        <div>
+            <h1 class="text-3xl font-bold text-accent tracking-wider">LEDGER<span class="text-white">LITE</span></h1>
+            <p class="text-sm text-gray-400 mt-1">Track your personal expenses seamlessly</p>
         </div>
+        <div class="text-right">
+            <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Grand Total</p>
+            <p class="text-2xl font-black text-white" id="grandTotal">৳0.00</p>
+        </div>
+    </header>
 
-        <!-- XP Progress Bar -->
-        <div class="mb-8">
-            <div class="flex justify-between text-xs text-gray-400 mb-2">
-                <span>XP Progress</span>
-                <span id="xpText">0 / 100 XP</span>
-            </div>
-            <div class="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
-                <div id="xpBar" class="bg-success h-3 rounded-full transition-all duration-500 ease-out" style="width: 0%;"></div>
-            </div>
-        </div>
-
-        <!-- Timer Section -->
-        <div class="text-center mb-8">
-            <input type="text" id="taskInput" placeholder="What are you studying?..." class="w-full bg-gray-800 text-center text-white p-3 rounded-lg border border-gray-600 focus:outline-none focus:border-primary mb-6 transition-colors">
-            
-            <div id="timerDisplay" class="text-7xl font-mono font-bold timer-glow mb-6">25:00</div>
-            
-            <div class="flex gap-4 justify-center">
-                <button id="startBtn" onclick="startTimer()" class="bg-primary hover:bg-indigo-400 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full">Start</button>
-                <button id="resetBtn" onclick="resetTimer()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors hidden">Reset</button>
-            </div>
-        </div>
-
-        <!-- Status Message -->
-        <div id="statusMsg" class="text-center text-sm text-gray-400 h-6">
-            Ready to grind.
-        </div>
+    <!-- Create New List Form -->
+    <div class="bg-cardBg p-5 rounded-lg shadow-lg border border-gray-700 mb-8 flex gap-3 tilt-card" data-tilt data-tilt-max="2" data-tilt-speed="400" data-tilt-glare="true" data-tilt-max-glare="0.05">
+        <input type="text" id="newListTitle" placeholder="e.g., Bazar Today, Shabab's Wishlist..." class="flex-grow p-3 bg-darkBg border border-gray-600 rounded text-white focus:outline-none focus:border-accent transition-colors tilt-card-inner" onkeypress="handleEnter(event, createList)">
+        <button onclick="createList()" class="bg-accent hover:bg-accentHover text-white font-bold py-3 px-6 rounded transition-colors duration-200 tilt-card-inner shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+            Create Note
+        </button>
     </div>
 
+    <!-- Expense Lists Container -->
+    <main id="listsContainer" class="flex-grow space-y-6 pb-10">
+        <!-- Lists will be injected here by JavaScript -->
+    </main>
+
     <script>
-        // Game Logic & State
-        let timeLeft = 25 * 60; // 25 minutes in seconds
-        let timerId = null;
-        let isRunning = false;
+        // --- AUDIO SYNTHESIZER ---
+        let audioCtx = null;
         
-        // Load stats from LocalStorage
-        let playerStats = JSON.parse(localStorage.getItem('focusforge_stats')) || { level: 1, xp: 0 };
-        const XP_PER_LEVEL = 100;
-        const XP_REWARD = 25; // XP gained per successful 25 min session
-
-        function updateUI() {
-            // Update Timer Text
-            const minutes = Math.floor(timeLeft / 60);
-            const seconds = timeLeft % 60;
-            document.getElementById('timerDisplay').textContent = 
-                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            
-            // Update Level and XP UI
-            document.getElementById('levelDisplay').textContent = playerStats.level;
-            document.getElementById('xpText').textContent = `${playerStats.xp} / ${XP_PER_LEVEL} XP`;
-            
-            const xpPercentage = (playerStats.xp / XP_PER_LEVEL) * 100;
-            document.getElementById('xpBar').style.width = `${xpPercentage}%`;
+        // Browsers require a user interaction before playing audio
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         }
 
-        function startTimer() {
-            if (isRunning) return;
+        function playSound(type = 'add') {
+            if (!audioCtx) return;
             
-            const task = document.getElementById('taskInput').value || "this task";
-            document.getElementById('statusMsg').textContent = `Grinding ${task}... Do not switch tabs.`;
-            document.getElementById('statusMsg').className = "text-center text-sm text-primary h-6 animate-pulse";
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
             
-            document.getElementById('startBtn').classList.add('hidden');
-            document.getElementById('resetBtn').classList.remove('hidden');
-            
-            isRunning = true;
-            timerId = setInterval(() => {
-                timeLeft--;
-                updateUI();
-                
-                if (timeLeft <= 0) {
-                    completeSession();
-                }
-            }, 1000);
-        }
-
-        function completeSession() {
-            clearInterval(timerId);
-            isRunning = false;
-            
-            // Award XP
-            playerStats.xp += XP_REWARD;
-            let levelUpMsg = "";
-            
-            // Level Up Check
-            if (playerStats.xp >= XP_PER_LEVEL) {
-                playerStats.level++;
-                playerStats.xp = playerStats.xp - XP_PER_LEVEL;
-                levelUpMsg = ` 🏆 LEVEL UP to Level ${playerStats.level}!`;
+            if (type === 'add') {
+                // High tech pop for adding items
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            } else if (type === 'delete') {
+                // Low thud for deleting items
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.15);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
             }
             
-            // Save to device
-            localStorage.setItem('focusforge_stats', JSON.stringify(playerStats));
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
             
-            // Reset timer UI
-            timeLeft = 25 * 60;
-            document.getElementById('startBtn').classList.remove('hidden');
-            document.getElementById('startBtn').textContent = "Start Next Session";
-            document.getElementById('resetBtn').classList.add('hidden');
-            
-            document.getElementById('statusMsg').textContent = `Session complete! +${XP_REWARD} XP.${levelUpMsg}`;
-            document.getElementById('statusMsg').className = "text-center text-sm text-success h-6 font-bold";
-            
-            updateUI();
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.15);
         }
 
-        function resetTimer() {
-            clearInterval(timerId);
-            isRunning = false;
-            timeLeft = 25 * 60;
-            
-            document.getElementById('startBtn').classList.remove('hidden');
-            document.getElementById('startBtn').textContent = "Start";
-            document.getElementById('resetBtn').classList.add('hidden');
-            
-            document.getElementById('statusMsg').textContent = "Session abandoned. No XP gained.";
-            document.getElementById('statusMsg').className = "text-center text-sm text-red-400 h-6";
-            
-            updateUI();
+        // --- APP LOGIC ---
+        let expenseNotes = JSON.parse(localStorage.getItem('ledgerlite_data')) || [];
+
+        function saveAndRender() {
+            localStorage.setItem('ledgerlite_data', JSON.stringify(expenseNotes));
+            renderUI();
         }
 
-        // Initialize UI on load
-        updateUI();
+        function createList() {
+            initAudio();
+            const titleInput = document.getElementById('newListTitle');
+            const title = titleInput.value.trim();
+            
+            if (!title) return;
+
+            const newList = {
+                id: Date.now().toString(),
+                title: title,
+                items: []
+            };
+
+            expenseNotes.unshift(newList);
+            titleInput.value = '';
+            playSound('add');
+            saveAndRender();
+        }
+
+        function deleteList(id) {
+            initAudio();
+            if (confirm("Are you sure you want to delete this entire note?")) {
+                expenseNotes = expenseNotes.filter(note => note.id !== id);
+                playSound('delete');
+                saveAndRender();
+            }
+        }
+
+        function addItem(listId) {
+            initAudio();
+            const nameInput = document.getElementById(`itemName_${listId}`);
+            const amountInput = document.getElementById(`itemAmount_${listId}`);
+            
+            const name = nameInput.value.trim();
+            const amount = parseFloat(amountInput.value);
+
+            if (!name || isNaN(amount) || amount <= 0) {
+                alert("Please enter a valid item name and amount.");
+                return;
+            }
+
+            const listIndex = expenseNotes.findIndex(note => note.id === listId);
+            if (listIndex !== -1) {
+                expenseNotes[listIndex].items.push({ name, amount });
+                playSound('add');
+                saveAndRender();
+            }
+        }
+
+        function deleteItem(listId, itemIndex) {
+            initAudio();
+            const listIndex = expenseNotes.findIndex(note => note.id === listId);
+            if (listIndex !== -1) {
+                expenseNotes[listIndex].items.splice(itemIndex, 1);
+                playSound('delete');
+                saveAndRender();
+            }
+        }
+
+        function handleEnter(event, callback, param = null) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                param ? callback(param) : callback();
+            }
+        }
+
+        function renderUI() {
+            const container = document.getElementById('listsContainer');
+            container.innerHTML = '';
+            
+            let grandTotal = 0;
+
+            if (expenseNotes.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 italic mt-10">No expense notes yet. Create one above to get started.</p>';
+                document.getElementById('grandTotal').textContent = '৳0.00';
+                return;
+            }
+
+            expenseNotes.forEach(note => {
+                const noteTotal = note.items.reduce((sum, item) => sum + item.amount, 0);
+                grandTotal += noteTotal;
+
+                let itemsHtml = '';
+                if (note.items.length === 0) {
+                    itemsHtml = '<p class="text-gray-500 text-sm italic py-2 tilt-card-inner">No items added yet.</p>';
+                } else {
+                    itemsHtml = note.items.map((item, index) => `
+                        <div class="flex justify-between items-center border-b border-gray-700/50 py-3 group tilt-card-inner">
+                            <span class="text-gray-200">${item.name}</span>
+                            <div class="flex items-center gap-4">
+                                <span class="text-accent font-mono font-medium">৳${item.amount.toFixed(2)}</span>
+                                <button onclick="deleteItem('${note.id}', ${index})" class="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete item">
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                const card = document.createElement('div');
+                // Added tilt-card class and data-tilt attributes for the 3D hover effect
+                card.className = "bg-cardBg rounded-lg shadow-lg border border-gray-700 overflow-hidden tilt-card";
+                card.setAttribute('data-tilt', '');
+                card.setAttribute('data-tilt-max', '2');
+                card.setAttribute('data-tilt-speed', '400');
+                card.setAttribute('data-tilt-glare', 'true');
+                card.setAttribute('data-tilt-max-glare', '0.05');
+                
+                card.innerHTML = `
+                    <div class="bg-darkBg/50 p-4 border-b border-gray-700 flex justify-between items-center tilt-card-inner">
+                        <h2 class="text-xl font-semibold text-white">${note.title}</h2>
+                        <div class="flex items-center gap-4">
+                            <span class="text-lg font-bold text-accent bg-accent/10 px-3 py-1 rounded">Total: ৳${noteTotal.toFixed(2)}</span>
+                            <button onclick="deleteList('${note.id}')" class="text-gray-500 hover:text-red-500 transition-colors text-sm">Delete Note</button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 bg-cardBg">
+                        ${itemsHtml}
+                    </div>
+
+                    <div class="p-4 bg-darkBg/30 border-t border-gray-700 flex gap-2 tilt-card-inner">
+                        <input type="text" id="itemName_${note.id}" placeholder="Item (e.g., Chicken)" class="w-1/2 p-2 bg-darkBg border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-accent" onkeypress="handleEnter(event, addItem, '${note.id}')">
+                        <input type="number" id="itemAmount_${note.id}" placeholder="Amount (৳)" class="w-1/3 p-2 bg-darkBg border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-accent" onkeypress="handleEnter(event, addItem, '${note.id}')">
+                        <button onclick="addItem('${note.id}')" class="w-1/6 bg-gray-700 hover:bg-accent text-white font-bold rounded text-sm transition-colors duration-200">
+                            Add
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            document.getElementById('grandTotal').textContent = `৳${grandTotal.toFixed(2)}`;
+
+            // Initialize VanillaTilt on the newly created cards
+            VanillaTilt.init(document.querySelectorAll(".tilt-card"));
+        }
+
+        renderUI();
     </script>
 </body>
 </html>
