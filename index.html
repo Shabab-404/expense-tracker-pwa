@@ -3,117 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SplitMate | Expense Tracker</title>
-    <!-- Tailwind CSS for styling -->
+    <title>FocusForge | Level Up Your Study</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        darkBg: '#121212',
-                        panelBg: '#1E1E24',
-                        accent: '#00E5FF' // Change this hex code to change the neon cyan color
+                        brandBg: '#0f172a',    // Deep slate dark
+                        panelBg: '#1e293b',    // Slightly lighter slate
+                        primary: '#6366f1',    // Indigo accent
+                        success: '#22c55e',    // Green for XP/Level ups
                     }
                 }
             }
         }
     </script>
     <style>
-        body { 
-            background-color: #121212; 
-            color: #E0E0E0; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-        }
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .timer-glow { text-shadow: 0 0 20px rgba(99, 102, 241, 0.5); }
     </style>
 </head>
-<body class="p-4 md:p-8 max-w-2xl mx-auto h-screen flex flex-col">
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
 
-    <header class="mb-8 text-center border-b border-gray-700 pb-4">
-        <h1 class="text-3xl font-bold text-accent tracking-wider">SPLITMATE</h1>
-        <p class="text-sm text-gray-400 mt-1">Settle up your ৳ expenses instantly</p>
-    </header>
-
-    <main class="flex-grow space-y-6">
-        <!-- Add Expense Form -->
-        <div class="bg-panelBg p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 class="text-xl font-semibold mb-4 text-white">Add New Expense</h2>
-            <div class="flex gap-4 mb-4">
-                <input type="text" id="payerName" placeholder="Who paid? (e.g., Shabab)" class="w-1/2 p-3 bg-darkBg border border-gray-600 rounded text-white focus:outline-none focus:border-accent">
-                <input type="number" id="amount" placeholder="Amount in ৳" class="w-1/2 p-3 bg-darkBg border border-gray-600 rounded text-white focus:outline-none focus:border-accent">
+    <!-- App Container -->
+    <div class="bg-panelBg w-full max-w-md p-8 rounded-2xl shadow-2xl border border-gray-700">
+        
+        <!-- Header & Player Stats -->
+        <div class="flex justify-between items-center mb-8 border-b border-gray-600 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-wide">FocusForge</h1>
+                <p class="text-sm text-gray-400">Gamified Productivity</p>
             </div>
-            <button onclick="addExpense()" class="w-full bg-accent hover:bg-cyan-400 text-black font-bold py-3 rounded transition-colors duration-200">
-                Log Expense
-            </button>
+            <div class="text-right">
+                <div class="text-xs text-gray-400 uppercase tracking-wider">Current Level</div>
+                <div class="text-3xl font-black text-primary" id="levelDisplay">1</div>
+            </div>
         </div>
 
-        <!-- Ledger & Results -->
-        <div class="bg-panelBg p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 class="text-xl font-semibold mb-4 text-white">Who Owes Whom?</h2>
-            <ul id="settlements" class="space-y-3 text-lg">
-                <li class="text-gray-400 italic">No expenses logged yet.</li>
-            </ul>
+        <!-- XP Progress Bar -->
+        <div class="mb-8">
+            <div class="flex justify-between text-xs text-gray-400 mb-2">
+                <span>XP Progress</span>
+                <span id="xpText">0 / 100 XP</span>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
+                <div id="xpBar" class="bg-success h-3 rounded-full transition-all duration-500 ease-out" style="width: 0%;"></div>
+            </div>
         </div>
-    </main>
+
+        <!-- Timer Section -->
+        <div class="text-center mb-8">
+            <input type="text" id="taskInput" placeholder="What are you studying?..." class="w-full bg-gray-800 text-center text-white p-3 rounded-lg border border-gray-600 focus:outline-none focus:border-primary mb-6 transition-colors">
+            
+            <div id="timerDisplay" class="text-7xl font-mono font-bold timer-glow mb-6">25:00</div>
+            
+            <div class="flex gap-4 justify-center">
+                <button id="startBtn" onclick="startTimer()" class="bg-primary hover:bg-indigo-400 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full">Start</button>
+                <button id="resetBtn" onclick="resetTimer()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors hidden">Reset</button>
+            </div>
+        </div>
+
+        <!-- Status Message -->
+        <div id="statusMsg" class="text-center text-sm text-gray-400 h-6">
+            Ready to grind.
+        </div>
+    </div>
 
     <script>
-        let expenses = JSON.parse(localStorage.getItem('splitmate_data')) || {};
+        // Game Logic & State
+        let timeLeft = 25 * 60; // 25 minutes in seconds
+        let timerId = null;
+        let isRunning = false;
+        
+        // Load stats from LocalStorage
+        let playerStats = JSON.parse(localStorage.getItem('focusforge_stats')) || { level: 1, xp: 0 };
+        const XP_PER_LEVEL = 100;
+        const XP_REWARD = 25; // XP gained per successful 25 min session
 
-        function addExpense() {
-            const name = document.getElementById('payerName').value.trim();
-            const amount = parseFloat(document.getElementById('amount').value);
-
-            if (!name || isNaN(amount) || amount <= 0) return alert("Please enter a valid name and amount.");
-
-            expenses[name] = (expenses[name] || 0) + amount;
-            localStorage.setItem('splitmate_data', JSON.stringify(expenses));
+        function updateUI() {
+            // Update Timer Text
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('timerDisplay').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             
-            document.getElementById('payerName').value = '';
-            document.getElementById('amount').value = '';
-            calculateSplits();
+            // Update Level and XP UI
+            document.getElementById('levelDisplay').textContent = playerStats.level;
+            document.getElementById('xpText').textContent = `${playerStats.xp} / ${XP_PER_LEVEL} XP`;
+            
+            const xpPercentage = (playerStats.xp / XP_PER_LEVEL) * 100;
+            document.getElementById('xpBar').style.width = `${xpPercentage}%`;
         }
 
-        function calculateSplits() {
-            const names = Object.keys(expenses);
-            if (names.length === 0) return;
-
-            const total = Object.values(expenses).reduce((acc, curr) => acc + curr, 0);
-            const average = total / names.length;
-            const balances = {};
-
-            // Calculate net balance (Positive = they are owed money, Negative = they owe money)
-            names.forEach(name => { balances[name] = expenses[name] - average; });
-
-            let debtors = names.filter(n => balances[n] < 0).map(n => ({ name: n, amount: Math.abs(balances[n]) }));
-            let creditors = names.filter(n => balances[n] > 0).map(n => ({ name: n, amount: balances[n] }));
+        function startTimer() {
+            if (isRunning) return;
             
-            const resultsList = document.getElementById('settlements');
-            resultsList.innerHTML = '';
+            const task = document.getElementById('taskInput').value || "this task";
+            document.getElementById('statusMsg').textContent = `Grinding ${task}... Do not switch tabs.`;
+            document.getElementById('statusMsg').className = "text-center text-sm text-primary h-6 animate-pulse";
+            
+            document.getElementById('startBtn').classList.add('hidden');
+            document.getElementById('resetBtn').classList.remove('hidden');
+            
+            isRunning = true;
+            timerId = setInterval(() => {
+                timeLeft--;
+                updateUI();
+                
+                if (timeLeft <= 0) {
+                    completeSession();
+                }
+            }, 1000);
+        }
 
-            if (debtors.length === 0 && creditors.length === 0) {
-                resultsList.innerHTML = '<li class="text-green-400 font-medium">Everyone is perfectly settled up!</li>';
-                return;
+        function completeSession() {
+            clearInterval(timerId);
+            isRunning = false;
+            
+            // Award XP
+            playerStats.xp += XP_REWARD;
+            let levelUpMsg = "";
+            
+            // Level Up Check
+            if (playerStats.xp >= XP_PER_LEVEL) {
+                playerStats.level++;
+                playerStats.xp = playerStats.xp - XP_PER_LEVEL;
+                levelUpMsg = ` 🏆 LEVEL UP to Level ${playerStats.level}!`;
             }
-
-            // Simple Greedy Algorithm to settle debts
-            debtors.forEach(debtor => {
-                creditors.forEach(creditor => {
-                    if (debtor.amount === 0 || creditor.amount === 0) return;
-                    
-                    const amountToSettle = Math.min(debtor.amount, creditor.amount);
-                    debtor.amount -= amountToSettle;
-                    creditor.amount -= amountToSettle;
-
-                    const li = document.createElement('li');
-                    li.className = "bg-darkBg p-3 rounded border-l-4 border-accent text-gray-200";
-                    li.innerHTML = `<span class="font-bold text-white">${debtor.name}</span> owes <span class="font-bold text-white">${creditor.name}</span> <span class="text-accent font-mono">৳${amountToSettle.toFixed(2)}</span>`;
-                    resultsList.appendChild(li);
-                });
-            });
+            
+            // Save to device
+            localStorage.setItem('focusforge_stats', JSON.stringify(playerStats));
+            
+            // Reset timer UI
+            timeLeft = 25 * 60;
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('startBtn').textContent = "Start Next Session";
+            document.getElementById('resetBtn').classList.add('hidden');
+            
+            document.getElementById('statusMsg').textContent = `Session complete! +${XP_REWARD} XP.${levelUpMsg}`;
+            document.getElementById('statusMsg').className = "text-center text-sm text-success h-6 font-bold";
+            
+            updateUI();
         }
 
-        // Run on initial load
-        calculateSplits();
+        function resetTimer() {
+            clearInterval(timerId);
+            isRunning = false;
+            timeLeft = 25 * 60;
+            
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('startBtn').textContent = "Start";
+            document.getElementById('resetBtn').classList.add('hidden');
+            
+            document.getElementById('statusMsg').textContent = "Session abandoned. No XP gained.";
+            document.getElementById('statusMsg').className = "text-center text-sm text-red-400 h-6";
+            
+            updateUI();
+        }
+
+        // Initialize UI on load
+        updateUI();
     </script>
 </body>
 </html>
