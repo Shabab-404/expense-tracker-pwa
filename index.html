@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SplitMate | Expense Tracker</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#121212',
+                        panelBg: '#1E1E24',
+                        accent: '#00E5FF' // Change this hex code to change the neon cyan color
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #121212; 
+            color: #E0E0E0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 max-w-2xl mx-auto h-screen flex flex-col">
+
+    <header class="mb-8 text-center border-b border-gray-700 pb-4">
+        <h1 class="text-3xl font-bold text-accent tracking-wider">SPLITMATE</h1>
+        <p class="text-sm text-gray-400 mt-1">Settle up your ৳ expenses instantly</p>
+    </header>
+
+    <main class="flex-grow space-y-6">
+        <!-- Add Expense Form -->
+        <div class="bg-panelBg p-6 rounded-lg shadow-lg border border-gray-700">
+            <h2 class="text-xl font-semibold mb-4 text-white">Add New Expense</h2>
+            <div class="flex gap-4 mb-4">
+                <input type="text" id="payerName" placeholder="Who paid? (e.g., Shabab)" class="w-1/2 p-3 bg-darkBg border border-gray-600 rounded text-white focus:outline-none focus:border-accent">
+                <input type="number" id="amount" placeholder="Amount in ৳" class="w-1/2 p-3 bg-darkBg border border-gray-600 rounded text-white focus:outline-none focus:border-accent">
+            </div>
+            <button onclick="addExpense()" class="w-full bg-accent hover:bg-cyan-400 text-black font-bold py-3 rounded transition-colors duration-200">
+                Log Expense
+            </button>
+        </div>
+
+        <!-- Ledger & Results -->
+        <div class="bg-panelBg p-6 rounded-lg shadow-lg border border-gray-700">
+            <h2 class="text-xl font-semibold mb-4 text-white">Who Owes Whom?</h2>
+            <ul id="settlements" class="space-y-3 text-lg">
+                <li class="text-gray-400 italic">No expenses logged yet.</li>
+            </ul>
+        </div>
+    </main>
+
+    <script>
+        let expenses = JSON.parse(localStorage.getItem('splitmate_data')) || {};
+
+        function addExpense() {
+            const name = document.getElementById('payerName').value.trim();
+            const amount = parseFloat(document.getElementById('amount').value);
+
+            if (!name || isNaN(amount) || amount <= 0) return alert("Please enter a valid name and amount.");
+
+            expenses[name] = (expenses[name] || 0) + amount;
+            localStorage.setItem('splitmate_data', JSON.stringify(expenses));
+            
+            document.getElementById('payerName').value = '';
+            document.getElementById('amount').value = '';
+            calculateSplits();
+        }
+
+        function calculateSplits() {
+            const names = Object.keys(expenses);
+            if (names.length === 0) return;
+
+            const total = Object.values(expenses).reduce((acc, curr) => acc + curr, 0);
+            const average = total / names.length;
+            const balances = {};
+
+            // Calculate net balance (Positive = they are owed money, Negative = they owe money)
+            names.forEach(name => { balances[name] = expenses[name] - average; });
+
+            let debtors = names.filter(n => balances[n] < 0).map(n => ({ name: n, amount: Math.abs(balances[n]) }));
+            let creditors = names.filter(n => balances[n] > 0).map(n => ({ name: n, amount: balances[n] }));
+            
+            const resultsList = document.getElementById('settlements');
+            resultsList.innerHTML = '';
+
+            if (debtors.length === 0 && creditors.length === 0) {
+                resultsList.innerHTML = '<li class="text-green-400 font-medium">Everyone is perfectly settled up!</li>';
+                return;
+            }
+
+            // Simple Greedy Algorithm to settle debts
+            debtors.forEach(debtor => {
+                creditors.forEach(creditor => {
+                    if (debtor.amount === 0 || creditor.amount === 0) return;
+                    
+                    const amountToSettle = Math.min(debtor.amount, creditor.amount);
+                    debtor.amount -= amountToSettle;
+                    creditor.amount -= amountToSettle;
+
+                    const li = document.createElement('li');
+                    li.className = "bg-darkBg p-3 rounded border-l-4 border-accent text-gray-200";
+                    li.innerHTML = `<span class="font-bold text-white">${debtor.name}</span> owes <span class="font-bold text-white">${creditor.name}</span> <span class="text-accent font-mono">৳${amountToSettle.toFixed(2)}</span>`;
+                    resultsList.appendChild(li);
+                });
+            });
+        }
+
+        // Run on initial load
+        calculateSplits();
+    </script>
+</body>
+</html>
